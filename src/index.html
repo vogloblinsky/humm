@@ -16,11 +16,37 @@
         <p>Hmm</p>
 
         <script>
+            let finalCategories = [];
+
+            let THRESHOLD = 500;
+
+            let nameSort = (a, b) => {
+                const genreA = a.name.toUpperCase();
+                const genreB = b.name.toUpperCase();
+
+                let comparison = 0;
+                if (genreA > genreB) {
+                    comparison = 1;
+                } else if (genreA < genreB) {
+                    comparison = -1;
+                }
+                return comparison;
+            }
+
             fetch('https://fr.openfoodfacts.org/categories.json')
-            .then((resp) => resp.json())
-            .then(function(data) {
-                console.log(data);
-            });
+                .then((resp) => resp.json())
+                .then(function(data) {
+                    let categories = data.tags;
+                    categories.forEach(categorie => {
+                        if (categorie.products > THRESHOLD && categorie.name.indexOf(':') === -1) {
+                            finalCategories.push(categorie);
+                        }
+                    });
+                    finalCategories = finalCategories.sort(nameSort);
+                    finalCategories.forEach(categorie => {
+                        console.log(categorie.name, categorie.products, categorie.url);
+                    });
+                });
         </script>
     </body>
 </html>
