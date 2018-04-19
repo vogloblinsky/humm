@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html class="no-js" lang="">
     <head>
@@ -7,22 +6,45 @@
         <title>Humm</title>
         <meta name="description" content="">
         <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+        <style>
+            body {
+                font-family: 'Helvetica'
+            }
+        </style>
     </head>
     <body>
         <!--[if lte IE 9]>
             <p class="browserupgrade">You are using an <strong>outdated</strong> browser. Please <a href="https://browsehappy.com/">upgrade your browser</a> to improve your experience and security.</p>
         <![endif]-->
 
-        <p>Hmm</p>
+        <h1>Hmm</h1>
+
+        <p>
+            <h2>Nutri-score</h2>
+            <select id="nutriscore">
+                <option>A</option>
+            </select>
+        </p>
+
+        <p>
+            <h2>Catégories principales</h2>
+            <select id="masterCategories"></select>
+        </p>
+
+        <p>
+            <h2>Premier résultat</h2>
+            <h3 id="resultName"></h3>
+            <img id="resultPic"></img>
+        </p>
 
         <script>
-            let finalCategories = [];
-
+            let masterCategories = [];
+            let $masterCategoriesSelect = document.getElementById('masterCategories');
             let THRESHOLD = 500;
 
             let nameSort = (a, b) => {
-                const genreA = a.name.toUpperCase();
-                const genreB = b.name.toUpperCase();
+                const genreA = a.data.name.fr.toUpperCase();
+                const genreB = b.data.name.fr.toUpperCase();
 
                 let comparison = 0;
                 if (genreA > genreB) {
@@ -33,20 +55,76 @@
                 return comparison;
             }
 
-            fetch('https://fr.openfoodfacts.org/categories.json')
-                .then((resp) => resp.json())
-                .then(function(data) {
-                    let categories = data.tags;
-                    categories.forEach(categorie => {
-                        if (categorie.products > THRESHOLD && categorie.name.indexOf(':') === -1) {
-                            finalCategories.push(categorie);
+            // Old url without relations but with number of products : 'https://fr.openfoodfacts.org/categories.json'
+            // local json is a snapshot of https://static.openfoodfacts.org/data/taxonomies/categories.json
+
+            Promise.all([
+                fetch('./categories.json'),
+                fetch('./categories-with-number-of-products.json')
+            ])
+            .then(responses => Promise.all(responses.map(resp => resp.json())))
+            .then(datas => {
+                console.log(datas);
+                let categories = Object.entries(datas[0]);
+                let categoriesWithNumberOfProducts = datas[1].tags;
+                
+
+                console.log(categories.length);
+                console.log(categoriesWithNumberOfProducts.length);
+
+                /**
+                 * Loop with categories with number of products and take only those over the thresold
+                 **/
+                let finalCategoriesWithNumberOfProducts = [];
+                categoriesWithNumberOfProducts.forEach(categorie => {
+                    if (categorie.products > THRESHOLD && categorie.name.indexOf(':') === -1) {
+                        finalCategoriesWithNumberOfProducts.push(categorie);
+                    }
+                });
+
+                categories.forEach(categorie => {
+                    /*if (categorie[0].indexOf('fr:') !== -1) {
+                        console.log(categorie[1].name['fr'], categorie[1]);
+                    }*/
+                    if (typeof categorie[1].parents === 'undefined' && typeof categorie[1].name.fr !== 'undefined') {
+                        let numberOfProducts = 0;
+                        let finalCategorieWithNumber = finalCategoriesWithNumberOfProducts.find(categorieWithNumber => categorieWithNumber.id === categorie[0]);
+                        let finalReturn = {
+                            key: categorie[0],
+                            data: categorie[1]
+                        };
+                        if (typeof finalCategorieWithNumber !== 'undefined') {
+                            console.log(categorie[0], finalCategorieWithNumber.products);
+                            finalReturn.products = finalCategorieWithNumber.products;
+                        }
+                        
+                        masterCategories.push(finalReturn);
+                    }
+                });
+
+                masterCategories = masterCategories.sort(nameSort);
+                masterCategories.forEach(categorie => {
+                    console.log(categorie.data.name.fr, categorie);
+                    $masterCategoriesSelect.options[$masterCategoriesSelect.options.length] = new Option(categorie.data.name.fr, categorie.key);
+                });
+            });
+
+            $masterCategoriesSelect.addEventListener('change', (e) => {
+                console.log('select: ', e.target.value);
+                fetch(`https://fr.openfoodfacts.org/cgi/search.pl?tagtype_0=categories&tag_contains_0=contains&tag_0=${e.target.value}&tagtype_1=nutrition_grades&tag_contains_1=contains&tag_1=A&action=process&json=1`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.products.length > 0) {
+                            console.log(data);
+                            console.log(data.products[0]);
+                            console.log(data.products[0].product_name_fr);
+                            document.getElementById('resultName').innerHTML = data.products[0].product_name_fr;
+                            document.getElementById('resultPic').src = data.products[0].image_url;
+                        } else {
+                            console.log('no products found');
                         }
                     });
-                    finalCategories = finalCategories.sort(nameSort);
-                    finalCategories.forEach(categorie => {
-                        console.log(categorie.name, categorie.products, categorie.url);
-                    });
-                });
+            });
         </script>
     </body>
 </html>
